@@ -1,0 +1,27 @@
+server {
+    listen 80;
+    server_name localhost formulinked.ru www.formulinked.ru;
+
+    root /etc/opt/service/web_app/dist;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+        expires -1;
+        add_header Cache-Control "no-store, no-cache, must-revalidate";
+    }
+
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location /favicon.ico {
+        alias /etc/opt/service/web_app/dist/static/favicon.ico;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|json)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}

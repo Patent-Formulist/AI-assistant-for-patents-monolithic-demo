@@ -1,0 +1,126 @@
+# Демонстрационный прод-стек (сокращённая версия).
+#
+# Полная конфигурация (HTTPS, certbot, отдельные сети по ролям, лимиты,
+# логирование и healthcheck'и) поставляется отдельно. Принцип: сервер не
+# собирает код, а тянет готовые образы из реестра.
+name: formulinked-demo-prod
+
+networks:
+  backend: {}
+  temporal:
+    internal: true
+
+volumes:
+  postgres-data:
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:15-alpine}
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      POSTGRES_DB: ${POSTGRES_DB:-formulist}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  migrations:
+    image: ${BACKEND_IMAGE:-muschketl/formulinked-backend:latest}
+    command: sh -c "alembic upgrade head"
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_NAME: ${POSTGRES_DB:-formulist}
+      DATABASE_USERNAME: ${POSTGRES_USER:-admin}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY in .env.prod}
+      ROSPATENT_API_KEY: ${ROSPATENT_API_KEY:?set ROSPATENT_API_KEY in .env.prod}
+    depends_on:
+      - postgres
+    networks:
+      - backend
+    restart: "no"
+
+  backend:
+    image: ${BACKEND_IMAGE:-muschketl/formulinked-backend:latest}
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_NAME: ${POSTGRES_DB:-formulist}
+      DATABASE_USERNAME: ${POSTGRES_USER:-admin}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      TEMPORAL_ADDRESS: temporal:7233
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY in .env.prod}
+      ROSPATENT_API_KEY: ${ROSPATENT_API_KEY:?set ROSPATENT_API_KEY in .env.prod}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - backend
+      - temporal
+
+  worker:
+    image: ${BACKEND_IMAGE:-muschketl/formulinked-backend:latest}
+    command: ["python", "-m", "app.temporal.worker"]
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_NAME: ${POSTGRES_DB:-formulist}
+      DATABASE_USERNAME: ${POSTGRES_USER:-admin}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      TEMPORAL_ADDRESS: temporal:7233
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY in .env.prod}
+      ROSPATENT_API_KEY: ${ROSPATENT_API_KEY:?set ROSPATENT_API_KEY in .env.prod}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - backend
+      - temporal
+
+  temporal-setup:
+    image: temporalio/admin-tools:1.32.0
+    entrypoint: ["sh", "/scripts/setup-schema.sh"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+    volumes:
+      - ./deploy/temporal/setup-schema.sh:/scripts/setup-schema.sh:ro
+    depends_on:
+      - postgres
+    networks:
+      - backend
+    restart: "no"
+
+  temporal:
+    image: temporalio/server:1.32.0
+    environment:
+      DB: postgres12
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+      LOG_LEVEL: warn
+    depends_on:
+      temporal-setup:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - backend
+      - temporal
+
+  nginx:
+    image: ${NGINX_IMAGE:-muschketl/formulinked-nginx:latest}
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - backend

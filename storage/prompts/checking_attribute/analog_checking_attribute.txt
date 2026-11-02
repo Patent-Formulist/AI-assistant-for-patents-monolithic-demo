@@ -1,0 +1,18 @@
+# Промпт "analog_checking_attribute.txt"
+
+Демонстрационная заглушка. Реальный текст промпта составляет интеллектуальную
+собственность проекта и поставляется отдельно.
+
+Формат: Python-шаблон `.format(**variables)`. Доступные переменные задаются
+билдером соответствующего пайплайна (см. `app/service/*/raw_data_generator`).
+
+Порядок подключения: положить файл с тем же именем в каталог из
+`config.yaml -> storage.prompt_dir` и указать относительный путь в
+`storage.*_prompt_path`.
+
+Ожидаемые переменные для этого промпта:
+
+- `{input_abstract_text}`
+- `{input_claims_text}`
+- `{input_description_text}`
+- `{attribute_text}`

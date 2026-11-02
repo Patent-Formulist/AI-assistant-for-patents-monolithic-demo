@@ -1,0 +1,165 @@
+validation:
+
+storage:
+  storage_dir: "./storage"
+  prompt_dir: "./prompts"
+  analog_attribute_prompt_path: "analog_attribute.txt"
+  analog_attribute_matcher_prompt_path: "attribute_matcher/analog_attribute_matcher.txt"
+  analog_checking_attribute_prompt_path: "checking_attribute/analog_checking_attribute.txt"
+  analog_identify_prompt_path: "analog_identify.txt"
+  search_query_instruction: "docs/instructions_for_the_search_query_of_the_object.txt"
+  patent_checking_attribute_prompt_path: "checking_attribute/patent_checking_attribute.txt"
+  patent_attribute_matcher_prompt_path: "attribute_matcher/patent_attribute_matcher.txt"
+
+# Database
+database:
+  # Logging SQL queries
+  echo: True
+  # Connection pool size
+  pool_size: 2 # The number of permanent connections in the pool
+  max_overflow: 5 # Maximum number of temporary connections over pool_size
+  # Checking connections
+  pre_ping: False # Checks if the connection is live before using
+  # Re-creating connections
+  pool_recycle: 3600 # 1 hour. Forcibly recreates connections every N seconds
+  # Pool class
+  pool_class:
+    "NullPool" # "QueuePool" - shared connection pool
+    # "NullPool" - without a pool (new connection every time)
+    # Session Settings
+  # The objects remain available after the commit.
+  expire_on_commit: False # The objects remain available after the commit.
+  # Explicit transaction management
+  autocommit: False
+  # Explicit flush control
+  autoflush: False
+  # Support for SQLAlchemy 2.x style
+  future: True
+  protocol: postgresql+asyncpg
+
+parser:
+  rospatent:
+    #ROSPATENT
+    #Settings (https://searchplatform.rospatent.gov.ru/for_developers)
+    #q - search query in a special language
+    #qn - is a natural language search query.
+    request_language: q
+    # the number of documents found (10 by default)
+    # to be returned in the search results. The format is an integer,
+    # from 0 (when no search results are displayed) to 10000.
+    request_limit: 10
+    # "relevance" – by relevance;
+    # "publication date:asc" – by publication date in ascending order
+    # "publication date:desc" – give the publication in descending order
+    # "filing date:asc" – by registration date in ascending order
+    # "filing date:desc" – by registration date in descending order
+    request_sort: relevance
+    # families of DOCDB patents "family:docdb"
+    # families of DWPI patents ("group_by": "family:dwpi").
+    request_group_by: family:docdb
+    #Limits the patents of which countries will be sought.
+    #Put them in capital letters separated by commas
+    request_countries: RU
+    request_base_delay: 3 # секунды
+    request_timeout: 100 # секунды
+    request_retries: 3
+    max_concurrent_requests: 10
+    user_agent: "Formulist/1.2"
+    required_fields: ["abstract", "claims", "description"]
+    priority_langs: ["ru", "eu"]
+
+llm:
+  deepseek:
+    max_retries_get_key: 5
+    temperature: 0
+    referer: "https://api.deepseek.com"
+    site_name: "AI-assistant-for-patents"
+    model: "deepseek-chat"
+    max_retries: 3
+    base_delay: 2
+    timeout: 240
+
+temporal:
+  # Address and namespace: TEMPORAL_ADDRESS, TEMPORAL_NAMESPACE env vars
+  # Parallel Rospatent/LLM calls per worker
+  external_max_concurrent_activities: 5
+  # Last-resort limit for a whole workflow execution. On this timeout Temporal
+  # ends the workflow without running its code and the job stays RUNNING, so keep
+  # it well above the worst case of all steps with their retries.
+  workflow_execution_timeout_seconds: 7200
+  # Timeouts and retries of workflow activities. Applied to workflows started
+  # after a change; running workflows keep the values they were started with.
+  steps:
+    # Job/task status writes for the UI progress
+    status:
+      start_to_close_seconds: 30
+      retry:
+        maximum_interval_seconds: 30
+        maximum_attempts: 10
+    # Steps calling external services (Rospatent, LLM)
+    external:
+      start_to_close_seconds: 900
+      retry:
+        initial_interval_seconds: 5
+        backoff_coefficient: 2.0
+        maximum_interval_seconds: 60
+        maximum_attempts: 3 # 0 = unlimited
+
+billing:
+  # Price of each pipeline task in kopecks; a pipeline costs the sum of the
+  # tasks that will run (skipped statistics steps are free). Unlisted: free.
+  task_prices:
+    analog_link_generation: 0
+    analog_metadata_enrichment: 0
+    analog_attributes_generation: 0
+    analog_attributes_matching: 0
+    patent_attributes_generation: 0
+    general_attributes_generation: 0
+    analog_coincidence: 0
+    patent_coincidence: 0
+    identity_generation: 0
+    generate_application: 0
+
+legal:
+  # Published documents; the text is storage/legal/<document>/<version>.md.
+  # A new edition is a new file and a new version here: old files are not changed.
+  documents:
+    cookie_policy:
+      title: "Политика использования cookie и локального хранилища"
+      version: "2026-10-27"
+      # Only storage the service needs to work: shown, not asked for consent
+      requires_consent: false
+    # Accepted at registration; paid operations need the current editions
+    terms:
+      title: "Публичная оферта"
+      version: "2026-10-28"
+      requires_consent: true
+    privacy_policy:
+      title: "Политика обработки персональных данных"
+      version: "2026-10-28"
+      requires_consent: true
+    # A separate document and a separate checkbox (152-FZ since 2025-09-01)
+    personal_data_consent:
+      title: "Согласие на обработку персональных данных"
+      version: "2026-10-28"
+      requires_consent: true
+
+auth:
+  access_token_expire_minutes: 42200
+  refresh_token_expire_minutes: 42200
+  jwt_algorithm: "HS256"
+
+log:
+  logs_dir: "./logs"
+  file_system: "system.log"
+  file_user: "user.log"
+  max_bytes: 10485760
+  backup_count: 5
+  encoding: "utf-8"
+  system_format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  user_format: "%(asctime)s - %(message)s"
+  file_level: "INFO"
+  console_level: "DEBUG"
+  root_level: "DEBUG"
+  werkzeug_level: "INFO"
+

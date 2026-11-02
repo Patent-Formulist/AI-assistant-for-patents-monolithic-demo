@@ -1,0 +1,102 @@
+[project]
+name = "patent-formulist-backend"
+version = "0.1.0"
+description = "AI assistant for patents: backend monolith"
+requires-python = "==3.12.*"
+dependencies = [
+    # Web
+    "fastapi>=0.116.1",
+    "uvicorn>=0.35.0",
+    "httptools>=0.6.4",           # faster HTTP parser, picked up by uvicorn
+    "pydantic[email]>=2.11.7",    # EmailStr
+    # Database
+    "sqlalchemy>=2.0.43",
+    "advanced-alchemy>=1.11.0",
+    "asyncpg>=0.30.0",            # driver of the app and alembic (postgresql+asyncpg)
+    "alembic>=1.17.2",
+    "uuid6>=2025.0.1",
+    # Auth
+    "python-jose>=3.5.0",
+    "passlib>=1.7.4",
+    "argon2-cffi>=25.1.0",        # passlib argon2 scheme
+    # HTTP clients, config, documents
+    "aiohttp>=3.11.18",
+    "pydantic-settings[yaml]>=2.11",  # Settings: .env + config.yaml
+    "python-dotenv>=1.1.1",
+    "pyyaml>=6.0.2",
+    "openpyxl>=3.1.5",
+    "python-docx>=1.2.0",
+    "psutil>=7.2.2",
+    # Background pipelines (ADR 0005)
+    "temporalio>=1.32.0",
+    # Monitoring: errors of the API and the worker (docs/reports/2026-10-28-monitoring.md)
+    "sentry-sdk[fastapi]>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.1.0",
+    "pytest-cov>=7.1.0",
+    "ruff==0.16.7",
+    "watchfiles>=1.1.0",          # uvicorn --reload in the dev image
+]
+
+[tool.uv]
+# An application, not a library: install dependencies only
+package = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["migrations/versions", "logs", "storage"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "ASYNC", # flake8-async
+]
+ignore = [
+    "E501",   # line length is handled by the formatter
+    "UP042",  # StrEnum changes str()/format() of existing enums
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Interactive CLI scripts
+"scripts/*" = ["ASYNC250"]
+# Local mock servers for manual runs
+"test/mocks/*" = ["ASYNC110"]
+# Trailing spaces are part of the sample LLM responses
+"test/service/identity_prototype/raw_data_generator/test_identity_dto_builder.py" = ["W291"]
+"test/service/identity_prototype/raw_data_generator/test_response_parser.py" = ["W291"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependency markers are meant to be called in default arguments
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Header",
+    "fastapi.Path",
+    "fastapi.Query",
+    "fastapi.Body",
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Security",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "core", "test", "config"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+# Logging handlers are set up only by the entry points; caplog needs INFO
+log_level = "INFO"

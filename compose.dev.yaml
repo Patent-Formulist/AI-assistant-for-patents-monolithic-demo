@@ -1,0 +1,160 @@
+# Демонстрационный стек (сокращённая версия).
+#
+# Полная конфигурация dev-стека (все сервисы, сети, лимиты, healthcheck'и и
+# комментарии) поставляется отдельно. Здесь оставлен минимальный набор, чтобы
+# показать принцип: приложение + PostgreSQL + Temporal.
+#
+# Реальные секреты задаются в .env.dev (шаблон — .example.env.dev).
+name: formulinked-demo
+
+networks:
+  backend:
+    ipam:
+      config:
+        - subnet: 172.28.1.0/24
+  temporal:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.28.2.0/24
+
+volumes:
+  postgres-data:
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.dev}
+      POSTGRES_DB: ${POSTGRES_DB:-formulist}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      backend:
+        ipv4_address: 172.28.1.2
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-formulist}"]
+      interval: 10s
+      retries: 5
+
+  migrations:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_NAME: ${POSTGRES_DB:-formulist}
+      DATABASE_USERNAME: ${POSTGRES_USER:-admin}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.dev}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY in .env.dev}
+      ROSPATENT_API_KEY: ${ROSPATENT_API_KEY:?set ROSPATENT_API_KEY in .env.dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      backend:
+        ipv4_address: 172.28.1.3
+    command: sh -c "alembic upgrade head"
+    restart: "no"
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_NAME: ${POSTGRES_DB:-formulist}
+      DATABASE_USERNAME: ${POSTGRES_USER:-admin}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.dev}
+      TEMPORAL_ADDRESS: temporal:7233
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY in .env.dev}
+      ROSPATENT_API_KEY: ${ROSPATENT_API_KEY:?set ROSPATENT_API_KEY in .env.dev}
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    networks:
+      backend:
+        ipv4_address: 172.28.1.4
+      temporal:
+        ipv4_address: 172.28.2.4
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: ["python", "-m", "app.temporal.worker"]
+    volumes:
+      - .:/app
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_NAME: ${POSTGRES_DB:-formulist}
+      DATABASE_USERNAME: ${POSTGRES_USER:-admin}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.dev}
+      TEMPORAL_ADDRESS: temporal:7233
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY in .env.dev}
+      ROSPATENT_API_KEY: ${ROSPATENT_API_KEY:?set ROSPATENT_API_KEY in .env.dev}
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    networks:
+      backend:
+        ipv4_address: 172.28.1.5
+      temporal:
+        ipv4_address: 172.28.2.5
+
+  temporal-setup:
+    image: temporalio/admin-tools:1.32.0
+    entrypoint: ["sh", "/scripts/setup-schema.sh"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.dev}
+    volumes:
+      - ./deploy/temporal/setup-schema.sh:/scripts/setup-schema.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      backend:
+        ipv4_address: 172.28.1.6
+    restart: "no"
+
+  temporal:
+    image: temporalio/server:1.32.0
+    environment:
+      DB: postgres12
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.dev}
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+      LOG_LEVEL: warn
+    depends_on:
+      temporal-setup:
+        condition: service_completed_successfully
+    networks:
+      backend:
+        ipv4_address: 172.28.1.7
+      temporal:
+        ipv4_address: 172.28.2.7
+
+  temporal-ui:
+    image: temporalio/ui:2.54.1
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    ports:
+      - "8233:8080"
+    depends_on:
+      - temporal
+    networks:
+      backend:
+        ipv4_address: 172.28.1.9
+      temporal:
+        ipv4_address: 172.28.2.9

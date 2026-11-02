@@ -1,0 +1,24 @@
+node_modules
+.git
+.gitignore
+README.md
+.vscode
+.env
+.env.dev
+.env.test
+.env.prod
+dist
+.DS_Store
+*.log
+__pycache__
+.idea.venv
+.ruff_cache
+.pytest_cache
+.coverage
+coverage.xml
+.temporal-test-server
+
+# Файлы деплоя: в образ не попадают
+deploy
+compose.dev.yaml
+compose.prod.yaml

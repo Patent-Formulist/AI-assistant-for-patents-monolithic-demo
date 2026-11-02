@@ -1,0 +1,22 @@
+FROM nginx:alpine
+
+# Убираем дефолтный конфиг
+RUN rm /etc/nginx/conf.d/default.conf
+
+# Папки для сайтов и сниппетов (нужны до COPY, если их нет в образе)
+RUN mkdir -p /etc/nginx/sites-enabled /etc/nginx/snippets /var/log/nginx
+
+# Копируем главный конфиг
+COPY nginx.conf /etc/nginx/nginx.conf
+
+# Копируем конфиг сайта.
+# В dev он будет перекрыт volume-монтированием из docker-compose,
+# но копия в образе полезна как fallback при локальном запуске контейнера.
+COPY sites/00-monolith.dev.conf /etc/nginx/sites-enabled/00-monolith.dev.conf
+
+# Общие proxy_set_header, подключаются через include snippets/proxy.conf
+COPY snippets/ /etc/nginx/snippets/
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

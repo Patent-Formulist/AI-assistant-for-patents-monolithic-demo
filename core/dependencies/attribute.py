@@ -1,0 +1,16 @@
+from typing import Annotated
+
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from core import logger
+from core.dependencies.dependencies import get_db
+
+logger = logger.get_logger(__name__)
+SessionDep = Annotated[AsyncSession, Depends(get_db)]
+
+
+def get_attribute_service(db: SessionDep):
+    from app.service.attribute.attribute import AttributeService
+
+    return AttributeService(session=db)

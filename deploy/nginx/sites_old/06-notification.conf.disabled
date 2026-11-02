@@ -1,0 +1,11 @@
+server {
+  listen 80;
+  server_name ws.notifications.local;
+
+  location /api/v1/ws/ {
+    proxy_pass http://localhost:8004/ws/;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+  }
+}
