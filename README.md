@@ -15,7 +15,7 @@ Backend-сервис на FastAPI для автоматизации работы
 | `storage/legal/` | заглушки документов |
 | `docs/` | заголовки разделов без содержимого |
 | `test/` | скелеты тестов (все пропущены) |
-| `app/service/{billing,payment,organization,legal}` | сигнатуры и docstring'и есть, реализация скрыта |
+| `app/service/{billing,payment,organization,legal, identify, statistics}` | сигнатуры и docstring'и есть, реализация скрыта |
 | `compose.dev.yaml`, `compose.prod.yaml` | сокращённые конфигурации |
 
 Приложение импортируется и запускается (97 маршрутов); функции с заглушками
